@@ -1,0 +1,18 @@
+# Composio Automation Trigger — Daily Gemini Transcript Summary
+# Created via composio-x-pi extension (authoringTools: create_trigger)
+name: "Daily Gemini Transcript Summary"
+trigger_type: "scheduled"
+schedule: "0 9 * * *"
+app: "google_drive"
+arguments:
+  query: "name contains 'gemini' or name contains 'transcript'"
+  maxResults: 5
+  folderId: "root"
+actions:
+  - name: "execute_n8n_workflow"
+    url: "https://n8n.districtangels.com/webhook/newsletter-flow-trigger"
+    method: "POST"
+    payload:
+      source: "composio-trigger"
+      trigger: "daily-gemini-summary"
+      account: "googledrive_gnomon-philip"

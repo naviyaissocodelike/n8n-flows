@@ -1,0 +1,107 @@
+{
+  "name": "newsletter-flow-trigger",
+  "nodes": [
+    {
+      "id": "agent-webhook",
+      "name": "Agent Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "newsletter-flow-trigger",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "newsletter-flow-trigger",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "read-slack",
+      "name": "Read Slack Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        470,
+        300
+      ],
+      "parameters": {
+        "operation": "get",
+        "channel": "=da-newsletter-flow",
+        "limit": 10,
+        "authentication": "oAuth2"
+      }
+    },
+    {
+      "id": "filter-new",
+      "name": "Filter New Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        690,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Filter messages that haven't been logged yet\nconst newItems = $input.all().filter(msg => !msg.json.processed);\nfor (const item of newItems) {\n  item.json.processed = true;\n}\nreturn newItems;"
+      }
+    },
+    {
+      "id": "append-drive",
+      "name": "Append to Google Doc",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 1,
+      "position": [
+        910,
+        300
+      ],
+      "parameters": {
+        "operation": "appendOrCreate",
+        "documentId": "Newsletter Flow Log",
+        "text": "={{ $node[\"filter-new\"].json.text }}",
+        "authentication": "oAuth2"
+      }
+    }
+  ],
+  "connections": {
+    "Agent Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Slack Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Slack Channel": {
+      "main": [
+        [
+          {
+            "node": "Filter New Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Activity": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    "agent-driven",
+    "da-newsletter-flow",
+    "slack",
+    "google-drive"
+  ]
+}
