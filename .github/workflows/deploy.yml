@@ -1,0 +1,84 @@
+name: Deploy n8n Workflows
+
+on:
+  push:
+    branches:
+      - feature/newsletter-flow
+    paths:
+      - 'workflows/**.json'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Validate workflow JSONs
+        run: |
+          for file in workflows/*.json; do
+            [ -e "$file" ] || continue
+            echo "Validating $file"
+            python3 -c "import json; json.load(open('$file'))" || exit 1
+          done
+
+  deploy:
+    needs: validate
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Ensure jq is available
+        run: command -v jq >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y jq)
+
+      - name: Deploy workflows to n8n
+        env:
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+        run: |
+          set -euo pipefail
+          echo "Deploying n8n workflows..."
+          for file in workflows/*.json; do
+            [ -e "$file" ] || continue
+            echo "Processing $file"
+            name=$(jq -r '.name // empty' "$file")
+            if [ -z "$name" ]; then
+              echo "Skipping $file — no name field"
+              continue
+            fi
+            existing_id=$(curl -fsS -H "X-N8N-API-KEY: $N8N_API_KEY" \
+              "$N8N_BASE_URL/api/v1/workflows" | jq -r --arg n "$name" \
+              '.data[]? | select(.name == $n) | .id // empty') || true
+            if [ -n "$existing_id" ]; then
+              echo "Updating existing workflow '$name' (id=$existing_id)"
+              curl -fsS -X DELETE -H "X-N8N-API-KEY: $N8N_API_KEY" \
+                "$N8N_BASE_URL/api/v1/workflows/$existing_id" || true
+            else
+              echo "Creating new workflow '$name'"
+            fi
+            curl -fsS -X POST -H "X-N8N-API-KEY: $N8N_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d @"$file" "$N8N_BASE_URL/api/v1/workflows"
+            echo "Deployed $name"
+          done
+          echo "All workflows deployed."
+
+      - name: Slack notification on success
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"✅ n8n workflows deployed successfully to production"}' \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Slack notification on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"❌ n8n workflow deployment failed. Check GitHub Actions logs."}' \
+            "$SLACK_WEBHOOK_URL"
