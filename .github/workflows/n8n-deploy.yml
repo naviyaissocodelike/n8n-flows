@@ -19,7 +19,11 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Runs on GitHub's runners by default. Set a repository variable
+    # N8N_RUNNER=self-hosted to run deploys from the Hetzner box instead, so the
+    # n8n API never has to answer requests from outside your own network.
+    # See runner-setup.md.
+    runs-on: ${{ vars.N8N_RUNNER || 'ubuntu-latest' }}
     environment: n8n-selfhosted
     steps:
       - uses: actions/checkout@v4
@@ -66,3 +70,23 @@ jobs:
             fi
           done
           exit $fail
+
+      # Optional: set a SLACK_WEBHOOK_URL secret to get deploy results in Slack.
+      # Skipped entirely when the secret is not set.
+      - name: Tell Slack it worked
+        if: success() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$(jq -n --arg t "✅ n8n deploy succeeded — $GITHUB_SHA on $GITHUB_REF_NAME" '{text:$t}')" \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Tell Slack it failed
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -sS -X POST -H 'Content-type: application/json' \
+            --data "$(jq -n --arg t "❌ n8n deploy failed — $GITHUB_SHA. Workflows on the instance are unchanged for anything that did not deploy: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" '{text:$t}')" \
+            "$SLACK_WEBHOOK_URL"

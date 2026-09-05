@@ -55,10 +55,14 @@ node tools/n8n.mjs scan                     # secrets in workflows/
 
 ## Repository secrets
 
-| Secret | Used by |
-| --- | --- |
-| `N8N_SELFHOSTED_API_KEY` | plan, deploy, import |
-| `N8N_CLOUD_API_KEY` | import from the old cloud account |
+| Secret | Used by | Required |
+| --- | --- | --- |
+| `N8N_SELFHOSTED_API_KEY` | plan, deploy, import | yes |
+| `N8N_CLOUD_API_KEY` | import from the old cloud account | for the migration |
+| `SLACK_WEBHOOK_URL` | deploy success/failure messages | no |
+
+Optionally set a repository **variable** `N8N_RUNNER=self-hosted` to run deploys from
+the Hetzner box rather than GitHub's runners. See [runner-setup.md](runner-setup.md).
 
 The deploy job runs in the `n8n-selfhosted` environment, so you can require an approval
 there if you want a human gate on production changes.

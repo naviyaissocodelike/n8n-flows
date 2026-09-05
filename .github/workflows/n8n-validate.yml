@@ -17,7 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # No --env here on purpose: this checks structure, secrets and webhook
+      # paths, which are always knowable. Whether every credential has an id
+      # mapped is checked in the deploy job, right before it touches the
+      # instance, so pull requests do not sit red while the map is being filled
+      # in during the migration.
       - name: Validate workflow definitions
-        run: node tools/n8n.mjs validate --env selfhosted
+        run: node tools/n8n.mjs validate
       - name: Scan for secrets
         run: node tools/n8n.mjs scan

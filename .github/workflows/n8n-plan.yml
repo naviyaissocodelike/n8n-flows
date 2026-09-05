@@ -9,7 +9,7 @@ on:
 jobs:
   plan:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.N8N_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: write
