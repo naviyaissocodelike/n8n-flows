@@ -239,8 +239,18 @@ async function cmdPull() {
   log(`${summaries.length} workflow(s)\n`);
 
   let blocked = 0;
+  const written = new Map();
   for (const summary of summaries) {
     const wf = await api(source, `/workflows/${summary.id}`);
+    const file = `${slug(wf.name)}.json`;
+    if (written.has(file)) {
+      log(`- ${wf.name}  SKIPPED`);
+      log(`    "${written.get(file)}" already claims ${file}. Two workflows whose`);
+      log('    names differ only by punctuation cannot both be stored. Rename one.');
+      process.exitCode = 1;
+      continue;
+    }
+    written.set(file, wf.name);
     const secrets = findSecrets(wf);
     const normalized = normalize(wf);
     let text = JSON.stringify(normalized, null, 2) + '\n';
@@ -253,10 +263,23 @@ async function cmdPull() {
     } else {
       log(`- ${wf.name}`);
     }
-    writeFileSync(join(dir, `${slug(wf.name)}.json`), text);
+    writeFileSync(join(dir, file), text);
   }
 
-  log(`\nwrote ${summaries.length} file(s) to ${dir}`);
+  log(`\nwrote ${written.size} file(s) to ${dir}`);
+
+  // A pull does not delete anything. A file left here for a workflow that no
+  // longer exists on the source would be re-created by the next deploy, which
+  // is rarely what someone wants, so say so rather than quietly leaving it.
+  const pulled = new Set([...written.keys()]);
+  const stale = existsSync(dir)
+    ? readdirSync(dir).filter((f) => f.endsWith('.json') && !pulled.has(f))
+    : [];
+  if (stale.length) {
+    log('\nin git but not on the source (a deploy would re-create these):');
+    for (const f of stale) log(`  - ${f}`);
+    log('Delete the file if the workflow is genuinely gone.');
+  }
   if (blocked) {
     log(`\n${blocked} workflow(s) had secrets pasted into node parameters. They were`);
     log(`replaced with ${REDACTION}, which validate and push both refuse to deploy.`);

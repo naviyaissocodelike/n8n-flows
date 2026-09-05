@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ['workflows/**', 'n8n.config.json', 'tools/**', '.github/workflows/n8n-*.yml']
   push:
-    branches: [main]
+    branches: [feature/newsletter-flow, main]
     paths: ['workflows/**', 'n8n.config.json', 'tools/**']
 
 # Offline only. This job takes no secrets and talks to no instance, so it is

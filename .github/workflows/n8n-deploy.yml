@@ -2,7 +2,9 @@ name: Deploy n8n workflows
 
 on:
   push:
-    branches: [main]
+    # feature/newsletter-flow is this repo's default branch today. main is listed
+    # so nothing has to change here if the default is ever renamed.
+    branches: [feature/newsletter-flow, main]
     paths: ['workflows/**', 'n8n.config.json']
   workflow_dispatch:
     inputs:
@@ -25,6 +27,10 @@ jobs:
     # See runner-setup.md.
     runs-on: ${{ vars.N8N_RUNNER || 'ubuntu-latest' }}
     environment: n8n-selfhosted
+    # Job level so the notification steps can test it in an `if`. A step's own
+    # env block is not reliably readable from that step's own condition.
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,21 +78,29 @@ jobs:
           exit $fail
 
       # Optional: set a SLACK_WEBHOOK_URL secret to get deploy results in Slack.
-      # Skipped entirely when the secret is not set.
+      # Skipped entirely when the secret is not set. Built with node rather than
+      # jq, which is present on GitHub's runners but not on every self-hosted one.
       - name: Tell Slack it worked
         if: success() && env.SLACK_WEBHOOK_URL != ''
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -sS -X POST -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "✅ n8n deploy succeeded — $GITHUB_SHA on $GITHUB_REF_NAME" '{text:$t}')" \
-            "$SLACK_WEBHOOK_URL"
+          node -e '
+            const text = `✅ n8n deploy succeeded — ${process.env.GITHUB_REF_NAME} @ ${process.env.GITHUB_SHA.slice(0,7)}`;
+            fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            }).then(r => console.log("slack:", r.status));
+          '
 
       - name: Tell Slack it failed
         if: failure() && env.SLACK_WEBHOOK_URL != ''
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -sS -X POST -H 'Content-type: application/json' \
-            --data "$(jq -n --arg t "❌ n8n deploy failed — $GITHUB_SHA. Workflows on the instance are unchanged for anything that did not deploy: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" '{text:$t}')" \
-            "$SLACK_WEBHOOK_URL"
+          node -e '
+            const run = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const text = `❌ n8n deploy failed — ${process.env.GITHUB_REF_NAME} @ ${process.env.GITHUB_SHA.slice(0,7)}. Anything that did not deploy is unchanged on the instance. ${run}`;
+            fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            }).then(r => console.log("slack:", r.status));
+          '

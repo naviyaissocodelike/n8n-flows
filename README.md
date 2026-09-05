@@ -64,6 +64,12 @@ node tools/n8n.mjs scan                     # secrets in workflows/
 Optionally set a repository **variable** `N8N_RUNNER=self-hosted` to run deploys from
 the Hetzner box rather than GitHub's runners. See [runner-setup.md](runner-setup.md).
 
+Add these as **repository** secrets, not environment secrets. Plan and import do not
+run inside an environment, so an environment secret would be invisible to them. To
+gate production changes behind an approval, create an `n8n-selfhosted` environment
+with required reviewers and leave it empty: the approval comes from the deploy job
+naming that environment, not from where the secret is stored.
+
 The deploy job runs in the `n8n-selfhosted` environment, so you can require an approval
 there if you want a human gate on production changes.
 
