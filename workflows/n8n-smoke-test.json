@@ -1,0 +1,52 @@
+{
+  "active": false,
+  "connections": {
+    "Run Smoke Test": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Post To Slack",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "n8n Smoke Test",
+  "nodes": [
+    {
+      "id": "smoke-trigger",
+      "name": "Run Smoke Test",
+      "parameters": {},
+      "position": [0, 0],
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "slackOAuth2Api": {
+          "name": "Slack OAuth2 API"
+        }
+      },
+      "id": "smoke-slack",
+      "name": "Post To Slack",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "jsonBody": "={\n  \"channel\": \"n8n-test\",\n  \"text\": \"✅ Hello from the self-hosted n8n at n8n.districtangels.com. If you can read this, the Slack credential works and the instance can reach Slack.\"\n}",
+        "method": "POST",
+        "nodeCredentialType": "slackOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "url": "https://slack.com/api/chat.postMessage"
+      },
+      "position": [220, 0],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

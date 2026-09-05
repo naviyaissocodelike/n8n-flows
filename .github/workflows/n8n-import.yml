@@ -1,0 +1,66 @@
+name: Import n8n workflows from an instance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Environment to pull from'
+        type: choice
+        options: [cloud, selfhosted]
+        default: cloud
+      only:
+        description: 'Optional filter — only workflows whose name contains this'
+        type: string
+        default: ''
+
+# Pulls live workflows into a branch and opens a PR, so the initial migration and
+# any change someone made in the n8n editor can come back into git without
+# anyone running the CLI locally.
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pull workflows
+        id: pull
+        continue-on-error: true
+        env:
+          N8N_CLOUD_API_KEY: ${{ secrets.N8N_CLOUD_API_KEY }}
+          N8N_SELFHOSTED_API_KEY: ${{ secrets.N8N_SELFHOSTED_API_KEY }}
+        run: |
+          set -o pipefail
+          node tools/n8n.mjs pull --from "${{ inputs.source }}" \
+            ${{ inputs.only && format('--only "{0}"', inputs.only) || '' }} | tee pull.txt
+
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain workflows)" ]; then
+            echo "no changes — git already matches ${{ inputs.source }}"
+            exit 0
+          fi
+          branch="n8n-import/${{ inputs.source }}-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add workflows
+          git commit -m "Import n8n workflows from ${{ inputs.source }}"
+          git push -u origin "$branch"
+          {
+            echo "Imported from \`${{ inputs.source }}\`."
+            echo
+            echo '```'
+            cat pull.txt
+            echo '```'
+            echo
+            echo "Review the diff before merging. Merging deploys to the self-hosted instance."
+          } > body.md
+          gh pr create --title "Import n8n workflows from ${{ inputs.source }}" --body-file body.md --draft

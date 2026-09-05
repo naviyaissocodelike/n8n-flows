@@ -1,0 +1,42 @@
+name: Plan n8n deploy
+
+on:
+  pull_request:
+    paths: ['workflows/**', 'n8n.config.json']
+
+# Shows what merging this PR would change on the self-hosted instance. It reads
+# the instance and writes nothing. Skipped for forks, which must not see the key.
+jobs:
+  plan:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.N8N_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Dry run against self-hosted
+        id: plan
+        env:
+          N8N_SELFHOSTED_API_KEY: ${{ secrets.N8N_SELFHOSTED_API_KEY }}
+        run: |
+          set -o pipefail
+          node tools/n8n.mjs push --to selfhosted | tee plan.txt
+
+      - name: Comment the plan on the PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### n8n deploy plan — \`n8n.districtangels.com\`"
+            echo
+            echo '```'
+            cat plan.txt 2>/dev/null || echo "the plan step failed before producing output"
+            echo '```'
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md
