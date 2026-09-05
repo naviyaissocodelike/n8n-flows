@@ -1,3 +1,2 @@
-migration/backups/
-migration/.env
+.env
 node_modules/

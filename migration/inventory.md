@@ -16,8 +16,14 @@ folder → Sheets log → Slack alert → acknowledgment email. Three submission
   Angels Team Email + Gmail account)
 - Trigger: Tally webhook. Re-registers with Tally on activation; confirm on the Tally
   side that the subscription moved.
-- Also calls the Anthropic API and Slack over plain HTTP Request nodes, so check those
-  nodes for inline keys after migrating.
+- ✅ Five `chat.postMessage` nodes carried the same hardcoded Slack bot token. They now
+  use the Slack OAuth2 credential, and the fix is published and live.
+- ⚠️ `Claude API Call to Analyze Company` and `Claude API Call to Analyze Referral`
+  still have an Anthropic key in a plaintext `x-api-key` header. No Anthropic
+  credential exists in the account, so this one needs a person: create an
+  httpHeaderAuth credential holding the key and point both nodes at it, or on
+  self-hosted reference `{{ $env.ANTHROPIC_API_KEY }}`. Until then a pull of this
+  workflow comes back redacted and will not deploy.
 - Highest risk item in the migration: most nodes, most credentials, and it emails
   founders.
 
@@ -29,10 +35,13 @@ back to the sheet, posts a summary to `#da-deal-flow`.
 - Credentials: Google Sheets, Gmail (District Angels Team Email)
 - Trigger: schedule, hour 9 — **instance timezone dependent**. Set `GENERIC_TIMEZONE`
   on the self-hosted box or this fires at the wrong hour.
-- ⚠️ The `Slack Daily Summary` node has a Slack bot token hardcoded in an
-  Authorization header instead of using the Slack credential. Rotate that token during
-  the migration and move it into the Slack OAuth2 credential, the way
-  `DA Slack Pass Handler` already does it.
+- ✅ The `Slack Daily Summary` node used to carry a Slack bot token in a plaintext
+  Authorization header. It now authenticates with the Slack OAuth2 credential. **The
+  fix is in the draft only** — this workflow had unpublished editor changes, so
+  publishing it also ships those. Review the draft and publish, then rotate the token.
+- While fixing that node, its body config was normalized: `specifyBody` had been set to
+  an expression rather than `"json"`, so the payload was going out through an undefined
+  `jsonBody` field. Worth confirming the summary actually posts after the next run.
 - ⚠️ Never active on both instances at once. Founders get duplicate emails.
 
 ### DA Slack Pass Handler
@@ -83,3 +92,21 @@ Every deal-flow workflow reads and writes the same Google Sheet
 (`1RQ8ZCYVNrFEvSWigBBuwIbAlUpMAPtR1j2okaw6SiRo`, "DA Tally<>n8n submissions log", tab
 `Submissions Log`). Both instances would write to the same rows, which is the reason
 the cutover is deactivate-then-activate rather than run-both-and-compare.
+
+## Slack
+
+Everything n8n posts to Slack now goes through the `Slack OAuth2 API` credential
+rather than a pasted bot token. Two things follow from that:
+
+- The credential's Slack app has to be in **`#da-deal-flow`** and
+  **`#da-investor-alerts`**. It already posts into `#da-deal-flow` (that is how the
+  Pass Handler replies in-thread), but `#da-investor-alerts` is only reached by the
+  investor alert, which used the old token. Invite the app there before the next
+  investor signup, or that alert will fail.
+- The old bot token is still valid and should be rotated. Nothing in n8n depends on it
+  any more once `DA Daily Email Sender` is published.
+
+The Slack app's Interactivity Request URL is the one piece of Slack config that decides
+which n8n instance the Pass and Engage buttons hit. It points at cloud today. Changing
+it is the cutover for that workflow, and there is no way to have both instances serve
+it at once.

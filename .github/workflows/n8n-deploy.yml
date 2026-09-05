@@ -1,0 +1,68 @@
+name: Deploy n8n workflows
+
+on:
+  push:
+    branches: [main]
+    paths: ['workflows/**', 'n8n.config.json']
+  workflow_dispatch:
+    inputs:
+      allow_webhook_change:
+        description: 'Allow webhook paths to change (only after the caller — Slack, Tally — has been repointed)'
+        type: boolean
+        default: false
+
+# Never run two deploys at once: n8n matches workflows by name, and overlapping
+# runs can interleave a create and an update on the same workflow.
+concurrency:
+  group: n8n-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: n8n-selfhosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate before touching the instance
+        run: |
+          node tools/n8n.mjs validate --env selfhosted
+          node tools/n8n.mjs scan
+
+      - name: Dry run
+        env:
+          N8N_SELFHOSTED_API_KEY: ${{ secrets.N8N_SELFHOSTED_API_KEY }}
+        run: node tools/n8n.mjs push --to selfhosted
+
+      - name: Deploy
+        env:
+          N8N_SELFHOSTED_API_KEY: ${{ secrets.N8N_SELFHOSTED_API_KEY }}
+        run: |
+          node tools/n8n.mjs push --to selfhosted --apply \
+            ${{ inputs.allow_webhook_change && '--allow-webhook-change' || '' }}
+
+      # A webhook that stops answering is how a Slack button silently dies, so
+      # check the endpoints rather than trusting a green deploy. This sends a real
+      # request, so only paths listed under webhookHealthchecks in n8n.config.json
+      # are probed — put a path there once you know the workflow ignores a payload
+      # it does not recognize.
+      - name: Check webhook endpoints still answer
+        run: |
+          fail=0
+          base=$(node -pe "require('./n8n.config.json').environments.selfhosted.url")
+          for path in $(node -pe "(require('./n8n.config.json').webhookHealthchecks||[]).join('\n')"); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              "$base/webhook/$path" \
+              -H 'Content-Type: application/json' \
+              -d '{"_healthcheck":"github-actions-deploy"}' || echo 000)
+            if [ "$code" = "404" ] || [ "$code" = "000" ]; then
+              echo "::error::webhook /webhook/$path returned $code — the workflow may not be active"
+              fail=1
+            else
+              echo "webhook /webhook/$path -> $code"
+            fi
+          done
+          exit $fail

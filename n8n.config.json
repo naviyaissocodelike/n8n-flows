@@ -1,0 +1,33 @@
+{
+  "workflowsDir": "workflows",
+  "webhookHealthchecks": [
+    "da-pass"
+  ],
+  "environments": {
+    "cloud": {
+      "url": "https://districtangels.app.n8n.cloud",
+      "urlEnv": "N8N_CLOUD_URL",
+      "keyEnv": "N8N_CLOUD_API_KEY",
+      "credentials": {}
+    },
+    "selfhosted": {
+      "url": "https://n8n.districtangels.com",
+      "urlEnv": "N8N_SELFHOSTED_URL",
+      "keyEnv": "N8N_SELFHOSTED_API_KEY",
+      "credentials": {
+        "Google Sheets OAuth2 API": "",
+        "Google Docs OAuth2 API": "",
+        "Google Drive OAuth2 API": "",
+        "District Angels Team Email": "",
+        "Gmail account": "",
+        "Gmail account 2": "",
+        "Slack OAuth2 API": "",
+        "Tally account": "",
+        "Supabase account": "",
+        "Notion account": "",
+        "Notion account 2": "",
+        "n8n free OpenAI API credits": ""
+      }
+    }
+  }
+}

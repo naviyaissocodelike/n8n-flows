@@ -1,0 +1,23 @@
+name: Validate n8n workflows
+
+on:
+  pull_request:
+    paths: ['workflows/**', 'n8n.config.json', 'tools/**', '.github/workflows/n8n-*.yml']
+  push:
+    branches: [main]
+    paths: ['workflows/**', 'n8n.config.json', 'tools/**']
+
+# Offline only. This job takes no secrets and talks to no instance, so it is
+# safe to run on any pull request.
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate workflow definitions
+        run: node tools/n8n.mjs validate --env selfhosted
+      - name: Scan for secrets
+        run: node tools/n8n.mjs scan
